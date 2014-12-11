@@ -136,9 +136,6 @@ def error():  # error rate: errors / (2 * haplotype length)
 
 if __name__ == '__main__':
 
-
-	print "This is the haplotype phasing program..."
-
 	###================================ read the file to generate the following: initialization ===============================
 	###========================================================================================================================
 	## physical positions
@@ -178,7 +175,6 @@ if __name__ == '__main__':
 	S = [s1, s2]
 
 
-
 	## reads, and reshaped reads
 	file = open("xxx.reads", 'r')
 	lines = file.readlines()
@@ -214,7 +210,6 @@ if __name__ == '__main__':
 		print "sampling round#",
 		print round,
 		print ":"
-
 
 
 		###======================== sample the R with fixed H (S now is conditionally independent)
@@ -267,7 +262,7 @@ if __name__ == '__main__':
 
 			for read in reads_reshaped[i]:  # all the reads under a specific site
 				allele = read[1]
-				if allele = 1:
+				if allele == 1:
 					if R[i] == 1:  # for h1
 						sum1 += math.log(1 - epsilon)
 						sum2 += math.log(epsilon)
@@ -304,7 +299,7 @@ if __name__ == '__main__':
 			H[0][i] = h1
 			h2 = np.random.binomial(1, p2) * 2 - 1
 			#H[1][i] = h2
-			H[1][i] = -h1  # they should be composite
+			H[1][i] = -h1  # they should be composite; NOTE: should they?
 
 
 		###======================== calculate (or summarize) the present likelihood value; and phasing errors
