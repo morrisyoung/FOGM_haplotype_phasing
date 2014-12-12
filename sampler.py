@@ -19,6 +19,7 @@ import math
 
 
 ## make every parameter and drawer global
+##=======================================
 epsilon = 0.01
 omega = 0.002
 N_site = 0
@@ -28,15 +29,18 @@ position = []
 TRUE = []
 H = []
 reference = []
+emission = []
 S = []
 reads = []
 R = []
 reads_reshaped = []
 N_round = 10000
+##=======================================
 
 
 
-def like():
+
+def like():  # global likelihood under the present parameter setting
 	global omega
 	global epsilon
 	global reads
@@ -134,6 +138,231 @@ def error():  # error rate: errors / (2 * haplotype length)
 
 
 
+def sampler_R():  # sampling R with fixed H (S is conditionally independent)
+	global N_reads
+	global reads
+	global H
+	global R
+	global epsilon
+
+	for i in range(N_reads):
+		read = reads[i]
+
+		sum1 = 0  # favoring score for haplotype#1
+		sum2 = 0  # favoring score for haplotype#2
+		for site in read:
+			index = site[0]
+			allele = site[1]
+
+			if allele * H[0][index] == 1:
+				theta1 = math.log(1 - epsilon)
+				theta2 = math.log(epsilon)
+			else:
+				theta1 = math.log(epsilon)
+				theta2 = math.log(1 - epsilon)
+
+			sum1 += theta1
+			sum2 += theta2
+
+		p1 = math.exp(sum1) / ( math.exp(sum1) + math.exp(sum2) )
+
+		## sample r of this read
+		r = np.random.binomial(1, p1) * 2 - 1
+		R[i] = r
+
+	return
+
+
+def sampler_S():  # we actually perform Viterbi decoding here, other than sampling
+	global emission
+	global N_site
+	global S
+	global position
+
+	## emission matrix: [  [[1-omega, omega, 1-omega, ...],  [1-omega, omega, 1-omega, ...]],  []  ]
+	## transition matrix: called when necessary
+	F1 = [[0] * N_site] * N_ref  # the DP maximum value
+	F2 = [[0] * N_site] * N_ref  # the achieved position in last site
+
+	###================== start Viterbi =====================
+	##==================== infer S[0] =======================
+	## forward maximization
+	for i in range(N_site):
+		if i == 0:
+			if H[0][i] == 1:  # favor ref = 1, use emission[0]
+				for j in range(N_ref):
+					F1[j][i] = emission[0][j][i]
+			else:  # favor ref = -1, use emission[1]
+				for j in range(N_ref):
+					F1[j][i] = emission[1][j][i]
+			continue
+
+		for j in range(N_ref):
+			## fill F1[j][i] and F2[j][i] for each j
+			max_value = 0
+			for k in range(N_ref):
+				## calculate: mu_{i-1}(z_{i-1}) * P(z_i | z_{i-1}) * P(x_i | z_i)
+				## if there is a bigger one, update: F1[j][i] and F2[j][i]
+				temp = 0
+				if H[0][i] == 1:
+					p1 = emission[0][j][i]
+				else:
+					p1 = emission[1][j][i]
+
+				tune1 = 1 # the ratio
+				tune2 = 1000 # N in the literature
+				r = (position[i] - position[i - 1]) * 0.00000001
+				## NOTE: tune here to make p1 and p2 comparable
+				if k == j:
+					p2 = (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
+				else:
+					p2 = (1 - math.exp( - tune1 * r )) / tune2
+
+				temp = p1 * p2 * F1[k][i-1]
+
+				if temp > max_value:
+					max_value = temp
+					F1[j][i] = temp
+					F2[j][i] = k
+
+	## first of all, find the last achieved reference
+	max_ref = 0
+	max_value = 0
+	for j in range(N_ref):
+		temp = F1[j][N_site - 1]
+		if temp > max_value:
+			max_ref = j
+	S[0][N_site - 1] = max_ref
+
+	## backtrack
+	for i in reversed(range(N_site)):  # find previous ref
+		if i == 0:
+			continue
+		S[0][i - 1] = F2[max_ref][i]
+		max_ref = S[0][i - 1]
+
+
+	##==================== infer S[1] =======================
+	## forward maximization
+	for i in range(N_site):
+		if i == 0:
+			if H[1][i] == 1:  # favor ref = 1, use emission[0]
+				for j in range(N_ref):
+					F1[j][i] = emission[0][j][i]
+			else:  # favor ref = -1, use emission[1]
+				for j in range(N_ref):
+					F1[j][i] = emission[1][j][i]
+			continue
+
+		for j in range(N_ref):
+			## fill F1[j][i] and F2[j][i] for each j
+			max_value = 0
+			for k in range(N_ref):
+				## calculate: mu_{i-1}(z_{i-1}) * P(z_i | z_{i-1}) * P(x_i | z_i)
+				## if there is a bigger one, update: F1[j][i] and F2[j][i]
+				temp = 0
+				if H[1][i] == 1:
+					p1 = emission[0][j][i]
+				else:
+					p1 = emission[1][j][i]
+
+				tune1 = 1 # the ratio
+				tune2 = 1000 # N in the literature
+				r = (position[i] - position[i - 1]) * 0.00000001
+				## NOTE: tune here to make p1 and p2 comparable
+				if k == j:
+					p2 = (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
+				else:
+					p2 = (1 - math.exp( - tune1 * r )) / tune2
+
+				temp = p1 * p2 * F1[k][i-1]
+
+				if temp > max_value:
+					max_value = temp
+					F1[j][i] = temp
+					F2[j][i] = k
+
+	## first of all, find the last achieved reference
+	max_ref = 0
+	max_value = 0
+	for j in range(N_ref):
+		temp = F1[j][N_site - 1]
+		if temp > max_value:
+			max_ref = j
+	S[1][N_site - 1] = max_ref
+
+	## backtrack
+	for i in reversed(range(N_site)):  # find previous ref
+		if i == 0:
+			continue
+		S[1][i - 1] = F2[max_ref][i]
+		max_ref = S[1][i - 1]
+	###=================== end Viterbi ======================
+
+	return
+
+
+def sampler_H():  # sampling H conditional on R and S
+	global N_site
+	global reads_reshaped
+	global R
+	global reference
+	global S
+	global H
+	global epsilon
+	global omega
+
+	for i in range(N_site):
+		sum1 = 0 # favor h1 = 1
+		sum2 = 0 # favor h1 = -1
+		sum3 = 0 # favor h2 = 1
+		sum4 = 0 # favor h2 = -1
+
+		for read in reads_reshaped[i]:  # all the reads under a specific site
+			allele = read[1]
+			if allele == 1:
+				if R[i] == 1:  # for h1
+					sum1 += math.log(1 - epsilon)
+					sum2 += math.log(epsilon)
+				else:  # for h2
+					sum3 += math.log(1 - epsilon)
+					sum4 += math.log(epsilon)
+			else:
+				if R[i] == 1:
+					sum1 += math.log(epsilon)
+					sum2 += math.log(1 - epsilon)
+				else:
+					sum3 += math.log(epsilon)
+					sum4 += math.log(1 - epsilon)
+
+		if reference[S[0][i]][i] == 1: # favor h1 = 1
+			sum1 += math.log(1 - omega)
+			sum2 += math.log(omega)
+		else:  # favor h1 = -1
+			sum1 += math.log(omega)
+			sum2 += math.log(1 - omega)
+
+		if reference[S[1][i]][i] == 1: # favor h2 = 1
+			sum3 += math.log(1 - omega)
+			sum4 += math.log(omega)
+		else:  # favor h2 = -1
+			sum3 += math.log(omega)
+			sum4 += math.log(1 - omega)
+
+		p1 = math.exp(sum1) / ( math.exp(sum1) + math.exp(sum2) )
+		p2 = math.exp(sum3) / ( math.exp(sum3) + math.exp(sum4) )
+
+		## sample h of this site in both haplotypes
+		h1 = np.random.binomial(1, p1) * 2 - 1
+		H[0][i] = h1
+		h2 = np.random.binomial(1, p2) * 2 - 1
+		#H[1][i] = h2
+		H[1][i] = -h1  # they should be composite; NOTE: should they?
+
+	return
+
+
+
 if __name__ == '__main__':
 
 	###================================ read the file to generate the following: initialization ===============================
@@ -173,6 +402,15 @@ if __name__ == '__main__':
 	s1 = [0] * N_site  # without loss of generality, we can choose 0 as the start reference panel
 	s2 = [0] * N_site
 	S = [s1, s2]
+	# also, once we have the reference read into memory, we can set the emission matrix
+	emission = [reference, map(lambda x: (lambda y: -y, x), reference)]
+	for matrix in emission:
+		for ref in matrix:
+			for i in range(len(ref)):
+				if ref[i] == 1:
+					ref[i] = 1 - omega
+				else:
+					ref[i] = omega
 
 
 	## reads, and reshaped reads
@@ -213,93 +451,18 @@ if __name__ == '__main__':
 
 
 		###======================== sample the R with fixed H (S now is conditionally independent)
-		for i in range(N_reads):
-			read = reads[i]
+		sampler_R()
 
-			sum1 = 0  # favoring score for haplotype#1
-			sum2 = 0  # favoring score for haplotype#2
-			for site in read:
-				index = site[0]
-				allele = site[1]
 
-				if allele * H[0][index] == 1:
-					theta1 = math.log(1 - epsilon)
-					theta2 = math.log(epsilon)
-				else:
-					theta1 = math.log(epsilon)
-					theta2 = math.log(1 - epsilon)
-
-				sum1 += theta1
-				sum2 += theta2
-
-			p1 = math.exp(sum1) / ( math.exp(sum1) + math.exp(sum2) )
-
-			## sample r of this read
-			r = np.random.binomial(1, p1) * 2 - 1
-			R[i] = r
 
 		###======================== sample the S with fixed H (R now is conditionally independent)
-		### pending
-
-
-
-
-
-
-
-
-
+		sampler_S()
 
 
 
 		###======================== sample the H with fixed R and S (NOTE: to be checked)
-		## sample h1 -- H[0]
-		for i in range(N_site):
-			sum1 = 0 # favor h1 = 1
-			sum2 = 0 # favor h1 = -1
-			sum3 = 0 # favor h2 = 1
-			sum4 = 0 # favor h2 = -1
+		sampler_H()
 
-			for read in reads_reshaped[i]:  # all the reads under a specific site
-				allele = read[1]
-				if allele == 1:
-					if R[i] == 1:  # for h1
-						sum1 += math.log(1 - epsilon)
-						sum2 += math.log(epsilon)
-					else:  # for h2
-						sum3 += math.log(1 - epsilon)
-						sum4 += math.log(epsilon)
-				else:
-					if R[i] == 1:
-						sum1 += math.log(epsilon)
-						sum2 += math.log(1 - epsilon)
-					else:
-						sum3 += math.log(epsilon)
-						sum4 += math.log(1 - epsilon)
-
-			if reference[S[0][i]][i] == 1: # favor h1 = 1
-				sum1 += math.log(1 - omega)
-				sum2 += math.log(omega)
-			else:  # favor h1 = -1
-				sum1 += math.log(omega)
-				sum2 += math.log(1 - omega)
-
-			if reference[S[1][i]][i] == 1: # favor h2 = 1
-				sum3 += math.log(1 - omega)
-				sum4 += math.log(omega)
-			else:  # favor h2 = -1
-				sum3 += math.log(omega)
-				sum4 += math.log(1 - omega)
-
-			p1 = math.exp(sum1) / ( math.exp(sum1) + math.exp(sum2) )
-			p2 = math.exp(sum3) / ( math.exp(sum3) + math.exp(sum4) )
-
-			## sample h of this site in both haplotypes
-			h1 = np.random.binomial(1, p1) * 2 - 1
-			H[0][i] = h1
-			h2 = np.random.binomial(1, p2) * 2 - 1
-			#H[1][i] = h2
-			H[1][i] = -h1  # they should be composite; NOTE: should they?
 
 
 		###======================== calculate (or summarize) the present likelihood value; and phasing errors
