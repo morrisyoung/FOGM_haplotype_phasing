@@ -10,6 +10,7 @@
 
 ## questions:
 ## 1. read index start from 1 or 0?
+## 2. remember to change the double lambda function
 
 
 import os
@@ -403,7 +404,12 @@ if __name__ == '__main__':
 	s2 = [0] * N_site
 	S = [s1, s2]
 	# also, once we have the reference read into memory, we can set the emission matrix
-	emission = [reference, map(lambda x: (lambda y: -y, x), reference)]
+	emission = [reference, reference]
+	for l in emission[1]:
+		for i in range(len(l)):
+			l[i] = -l[i]
+
+
 	for matrix in emission:
 		for ref in matrix:
 			for i in range(len(ref)):
