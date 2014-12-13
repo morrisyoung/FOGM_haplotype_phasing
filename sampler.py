@@ -132,7 +132,6 @@ def error():  # error rate: errors / (2 * haplotype length)
 	for i in range(N_site):
 		if TRUE[0][i] != H[0][i]:
 			error += 1
-	for i in range(N_site):
 		if TRUE[1][i] != H[1][i]:
 			error += 1
 	return error * 1.0 / (2 * N_site)
@@ -472,15 +471,10 @@ if __name__ == '__main__':
 
 
 
-
-	round = 0
 	for round in range(N_round):  ## or until equilibrium
 		print "sampling round#",
 		print round,
 		print ":"
-
-
-
 
 
 		###======================== sample the R with fixed H (S now is conditionally independent)
@@ -503,7 +497,7 @@ if __name__ == '__main__':
 
 		###======================== calculate (or summarize) the present likelihood value; and phasing errors
 		## likelihood; NOTE: maybe every 10 rounds?
-		if round % 10 = 0:
+		if round % 10 == 0:
 			print "present likelihood value is",
 			print like()
 
