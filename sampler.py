@@ -177,12 +177,22 @@ def sampler_S():  # we actually perform Viterbi decoding here, other than sampli
 	global emission
 	global N_site
 	global S
+	global H
+	global N_ref
 	global position
 
 	## emission matrix: [  [[1-omega, omega, 1-omega, ...],  [1-omega, omega, 1-omega, ...]],  []  ]
 	## transition matrix: called when necessary
-	F1 = [[0] * N_site] * N_ref  # the DP maximum value
-	F2 = [[0] * N_site] * N_ref  # the achieved position in last site
+
+	## change the following to hash table:
+	#F1 = [[0] * N_site] * N_ref  # the DP maximum value
+	#F2 = [[0] * N_site] * N_ref  # the achieved position in last site
+
+	F1 = {}
+	F2 = {}
+	for i in range(N_ref):
+		F1[i] = [0] * N_site
+		F2[i] = [0] * N_site
 
 	###================== start Viterbi =====================
 	##==================== infer S[0] =======================
@@ -204,6 +214,8 @@ def sampler_S():  # we actually perform Viterbi decoding here, other than sampli
 				## calculate: mu_{i-1}(z_{i-1}) * P(z_i | z_{i-1}) * P(x_i | z_i)
 				## if there is a bigger one, update: F1[j][i] and F2[j][i]
 				temp = 0
+				p1 = 0
+				p2 = 0
 				if H[0][i] == 1:
 					p1 = emission[0][j][i]
 				else:
@@ -261,6 +273,8 @@ def sampler_S():  # we actually perform Viterbi decoding here, other than sampli
 				## calculate: mu_{i-1}(z_{i-1}) * P(z_i | z_{i-1}) * P(x_i | z_i)
 				## if there is a bigger one, update: F1[j][i] and F2[j][i]
 				temp = 0
+				p1 = 0
+				p2 = 0
 				if H[1][i] == 1:
 					p1 = emission[0][j][i]
 				else:
@@ -478,21 +492,18 @@ if __name__ == '__main__':
 
 
 		###======================== sample the R with fixed H (S now is conditionally independent)
+		print "sampling R..."
 		sampler_R()
 
 
-
 		###======================== sample the S with fixed H (R now is conditionally independent)
+		print "sampling S..."
 		sampler_S()
 
 
-
 		###======================== sample the H with fixed R and S (NOTE: to be checked)
+		print "sampling H..."
 		sampler_H()
-
-
-
-
 
 
 		###======================== calculate (or summarize) the present likelihood value; and phasing errors
@@ -504,7 +515,6 @@ if __name__ == '__main__':
 		## error rate
 		print "present error rate is:",
 		print error()
-
 
 
 	print "sampling done..."
