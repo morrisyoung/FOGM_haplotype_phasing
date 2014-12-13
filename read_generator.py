@@ -5,6 +5,10 @@ import sys
 
 if __name__ == '__main__':
 
+	
+	N = 100
+
+
 	for index in range(60):
 
 
@@ -38,40 +42,40 @@ if __name__ == '__main__':
 
 		## h1: 5
 		i = 0
-		while i < len(test1):
+		while i < N:
 			## a new read
 			j = i
-			while j < len(test1) and (j - i) <= 4:
+			while j < N and (j - i) <= 4:
 				file.write(str(j) + " " + str(test1[j]) + " ")
 				j += 1
 			file.write("\n")
 			i += 3
 		## h2: 5
 		i = 0
-		while i < len(test2):
+		while i < N:
 			## a new read
 			j = i
-			while j < len(test2) and (j - i) <= 4:
+			while j < N and (j - i) <= 4:
 				file.write(str(j) + " " + str(test2[j]) + " ")
 				j += 1
 			file.write("\n")
 			i += 3
 		## h1: 4
 		i = 0
-		while i < len(test1):
+		while i < N:
 			## a new read
 			j = i
-			while j < len(test1) and (j - i) <= 3:
+			while j < N and (j - i) <= 3:
 				file.write(str(j) + " " + str(test1[j]) + " ")
 				j += 1
 			file.write("\n")
 			i += 3
 		## h2: 4
 		i = 0
-		while i < len(test2):
+		while i < N:
 			## a new read
 			j = i
-			while j < len(test2) and (j - i) <= 3:
+			while j < N and (j - i) <= 3:
 				file.write(str(j) + " " + str(test2[j]) + " ")
 				j += 1
 			file.write("\n")
