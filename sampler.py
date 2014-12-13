@@ -36,6 +36,8 @@ reads = []
 R = []
 reads_reshaped = []
 N_round = 10000
+N_test = 100  # the number of tested allele sites
+N_test2 = 50  # the number of reference panels used here
 ##=======================================
 
 
@@ -89,12 +91,12 @@ def like():  # global likelihood under the present parameter setting
 			sum += math.log(omega)
 
 		if H[1][i] == reference[S[1][i]][i]:
-			sum += math.log(1 -omega)
+			sum += math.log(1 - omega)
 		else:
 			sum += math.log(omega)
 
 		# tau
-		tune1 = 1 # the ratio
+		tune1 = 0.0001 # the ratio
 		tune2 = 1000 # N in the literature
 		r = (position[i+1] - position[i]) * 0.00000001
 		if S[0][i] == S[0][i + 1]:
@@ -114,7 +116,7 @@ def like():  # global likelihood under the present parameter setting
 		sum += math.log(omega)
 
 	if H[1][N_site - 1] == reference[S[1][N_site - 1]][N_site - 1]:
-		sum += math.log(1 -omega)
+		sum += math.log(1 - omega)
 	else:
 		sum += math.log(omega)
 
@@ -221,7 +223,7 @@ def sampler_S():  # we actually perform Viterbi decoding here, other than sampli
 				else:
 					p1 = emission[1][j][i]
 
-				tune1 = 1 # the ratio
+				tune1 = 0.0001 # the ratio
 				tune2 = 1000 # N in the literature
 				r = (position[i] - position[i - 1]) * 0.00000001
 				## NOTE: tune here to make p1 and p2 comparable
@@ -280,7 +282,7 @@ def sampler_S():  # we actually perform Viterbi decoding here, other than sampli
 				else:
 					p1 = emission[1][j][i]
 
-				tune1 = 1 # the ratio
+				tune1 = 0.0001 # the ratio
 				tune2 = 1000 # N in the literature
 				r = (position[i] - position[i - 1]) * 0.00000001
 				## NOTE: tune here to make p1 and p2 comparable
@@ -400,6 +402,7 @@ if __name__ == '__main__':
 	for line in lines:
 		pos = int((line.strip()).split("\t")[1])
 		position.append(pos)
+	position = position[0: N_test]
 	N_site = len(position)
 
 
@@ -408,22 +411,23 @@ if __name__ == '__main__':
 	file = open("phase" + str(index), 'r')
 	lines = file.readlines()
 	file.close()
-	h1 = map(lambda x: int(x) * 2 - 1, (lines[2 * index].strip()).split(" ") )
-	h2 = map(lambda x: int(x) * 2 - 1, (lines[2 * index + 1].strip()).split(" ") )
+	h1 = (map(lambda x: int(x) * 2 - 1, (lines[2 * index].strip()).split(" ") ))[0: N_test]
+	h2 = (map(lambda x: int(x) * 2 - 1, (lines[2 * index + 1].strip()).split(" ") ))[0: N_test]
 	TRUE = [h1, h2]  # two haplotype (only heterozygous sites in)
 	del lines[2 * index : 2 * index + 2]  # the left are the reference
 	# random generated one
 	h1 = np.random.binomial(1, 0.5, N_site) * 2 - 1
 	h2 = - h1
-	H = [h1, h2]	
+	H = [h1, h2]
 
 
 	## reference; removed all homozygous sites according to the above testing sample already
 	## should be lines
 	reference = []
 	for line in lines:
-		ref = map(lambda x: int(x) * 2 - 1, (line.strip()).split(" ") )
+		ref = (map(lambda x: int(x) * 2 - 1, (line.strip()).split(" ") ))[0: N_test]
 		reference.append(ref)
+	reference = reference[0: N_test2]
 	N_ref = len(reference)
 	s1 = [0] * N_site  # without loss of generality, we can choose 0 as the start reference panel
 	s2 = [0] * N_site
