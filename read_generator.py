@@ -1,21 +1,12 @@
 import os
 import sys
 
-
-
 if __name__ == '__main__':
-
-	
 	N = 100
 
-
 	for index in range(60):
-
-
-
 		print "now generating read for index number",
 		print index
-
 
 		file = open("phase" + str(index), 'r')
 		lines = file.readlines()
