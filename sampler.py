@@ -364,81 +364,103 @@ def sampler_H():  # sampling H conditional on R and S
 
 
 
+
+
 if __name__ == '__main__':
+
+
+	print "begin testing..."
+
+
+
+	## manually set the index first
+	index = 0
+
 
 	###================================ read the file to generate the following: initialization ===============================
 	###========================================================================================================================
 	## physical positions
 	position = []  # the physical positions for the inferred haplotypes (only heterozygous sites in)
-	file = open("xxx.legend", 'r')
+	file = open("legend" + str(index), 'r')
 	lines = file.readlines()
 	file.close()
 	for line in lines:
-		pos = int((line.strip()).split(" ")[1])
+		pos = int((line.strip()).split("\t")[1])
 		position.append(pos)
 	N_site = len(position)
 
 
 	## haplotype
 	# real one
-	file = open("xxx.phase", 'r')
+	file = open("phase" + str(index), 'r')
 	lines = file.readlines()
 	file.close()
-	h1 = map(lambda x: int(x), (lines[0].strip()).split(" ") )
-	h2 = map(lambda x: int(x), (lines[1].strip()).split(" ") )
+	h1 = map(lambda x: int(x) * 2 - 1, (lines[2 * index].strip()).split(" ") )
+	h2 = map(lambda x: int(x) * 2 - 1, (lines[2 * index + 1].strip()).split(" ") )
 	TRUE = [h1, h2]  # two haplotype (only heterozygous sites in)
+	del lines[2 * index : 2 * index + 2]  # the left are the reference
 	# random generated one
 	h1 = np.random.binomial(1, 0.5, N_site) * 2 - 1
 	h2 = - h1
-	H = [h1, h2]
+	H = [h1, h2]	
 
 
 	## reference; removed all homozygous sites according to the above testing sample already
-	lines = lines[2:]
+	## should be lines
 	reference = []
 	for line in lines:
-		ref = map(lambda x: int(x), (line.strip()).split(" ") )
+		ref = map(lambda x: int(x) * 2 - 1, (line.strip()).split(" ") )
 		reference.append(ref)
 	N_ref = len(reference)
 	s1 = [0] * N_site  # without loss of generality, we can choose 0 as the start reference panel
 	s2 = [0] * N_site
 	S = [s1, s2]
+
+
 	# also, once we have the reference read into memory, we can set the emission matrix
-	emission = [reference, reference]
-	for l in emission[1]:
-		for i in range(len(l)):
-			l[i] = -l[i]
-
-
-	for matrix in emission:
-		for ref in matrix:
-			for i in range(len(ref)):
-				if ref[i] == 1:
-					ref[i] = 1 - omega
+	temp1 = []
+	temp2 = []
+	for i in range(N_ref):
+		ref1 = reference[i][:]
+		ref2 = reference[i][:]
+		for j in range(N_site):
+			ref2[j] = -ref2[j]
+		temp1.append(ref1)
+		temp2.append(ref2)
+	emission = []
+	emission.append(temp1)
+	emission.append(temp2)
+	for i in range(2):
+		for j in range(N_ref):
+			for k in range(N_site):
+				if emission[i][j][k] == 1:
+					emission[i][j][k] = 1 - omega
 				else:
-					ref[i] = omega
+					emission[i][j][k] = omega
 
 
 	## reads, and reshaped reads
-	file = open("xxx.reads", 'r')
+	file = open("read" + str(index), 'r')
 	lines = file.readlines()
 	file.close()
 	N_reads = len(lines)
-	reads = [] # each list is one short read; each tuple is a specific site, index and allele value
+	reads = [] # each list is one short read; each tuple is a specific site, containing index and allele value
 	for line in lines:
-		line = map(lambda x: int(x), (line.strip()).split(" ")[1:] )
+		line = map(lambda x: int(x), (line.strip()).split(" ") )
 		read = []
 		i = 0
 		while i < len(line):
-			index = line[i] - 1  # assume the index start from 0
-			allele = line[i + 1]
-			i += 2
+			index = line[i]
+			allele = line[i + 1] * 2 - 1
 			read.append((index, allele))
+			i += 2
 		reads.append(read)
 	R = np.random.binomial(1, 0.5, N_reads) * 2 - 1  ## NOTE: if r = 1, favor the first haplotype; otherwise the second
 
-	reads_reshaped = [[ ]] * N_site  # each list is one site; each tuple has index of read and corresponding allele value
-	for i in range(len(reads)):
+	reads_reshaped = {}  # each hashing value is one site; each tuple has index of read and corresponding allele value
+	for i in range(N_site):
+		reads_reshaped[i] = []
+	for i in range(N_reads):
 		read = reads[i]
 		for site in read:  # site: (index, allele)
 			index = site[0]
@@ -449,11 +471,16 @@ if __name__ == '__main__':
 
 
 
+
+
 	round = 0
 	for round in range(N_round):  ## or until equilibrium
 		print "sampling round#",
 		print round,
 		print ":"
+
+
+
 
 
 		###======================== sample the R with fixed H (S now is conditionally independent)
@@ -468,6 +495,9 @@ if __name__ == '__main__':
 
 		###======================== sample the H with fixed R and S (NOTE: to be checked)
 		sampler_H()
+
+
+
 
 
 
