@@ -719,8 +719,8 @@ def sampler_H():  # sampling H conditional on R and S
 		h1 = np.random.binomial(1, p1) * 2 - 1
 		H[0][i] = h1
 		h2 = np.random.binomial(1, p2) * 2 - 1
-		#H[1][i] = h2
-		H[1][i] = -h1  # they should be composite; NOTE: should they?
+		H[1][i] = h2
+		#H[1][i] = -h1  # they should be composite; NOTE: should they? --> I don't think so. This will break the whole inference
 
 	return
 
