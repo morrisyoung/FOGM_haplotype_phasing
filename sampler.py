@@ -175,6 +175,9 @@ def sampler_R():  # sampling R with fixed H (S is conditionally independent)
 	return
 
 
+
+"""
+### this is the old sampler, in which we actually used Viterbi decoding and that's obviously wrong.
 def sampler_S():  # we actually perform Viterbi decoding here, other than sampling
 	global emission
 	global N_site
@@ -195,6 +198,7 @@ def sampler_S():  # we actually perform Viterbi decoding here, other than sampli
 	for i in range(N_ref):
 		F1[i] = [0] * N_site
 		F2[i] = [0] * N_site
+
 
 	###================== start Viterbi =====================
 	##==================== infer S[0] =======================
@@ -316,6 +320,349 @@ def sampler_S():  # we actually perform Viterbi decoding here, other than sampli
 	###=================== end Viterbi ======================
 
 	return
+"""
+
+
+
+
+def sampler_S():  # we use the sampling procedure described in the paper
+	global emission
+	global N_ref
+	global N_site
+	global S
+	global H
+	global position
+
+	## emission matrix: [  [[1-omega, omega, 1-omega, ...],  [1-omega, omega, 1-omega, ...]],  []  ]
+	## transition matrix: called when necessary
+
+	F1 = {}
+	F2 = {}
+	for i in range(N_ref):
+		F1[i] = [0] * N_site
+		F2[i] = [0] * N_site
+
+
+	#####============================== sampling S[0] =============================
+	#####======================== forward marginalization =========================
+	for i in range(N_site):
+		if i == 0:  # no content
+			continue
+
+		if i == 1:  # V1(s2)
+			for j in range(N_ref):
+				## fill F1[j][i] for each j
+				sum = 0
+				for k in range(N_ref):
+					## calculate exp( \xi() + \tau() + \xi() )
+					temp = 0
+
+					## \xi
+					if H[0][i - 1] == 1:  # favor S = 1, use emission[0]
+						temp += emission[0][k][i - 1]
+					else:
+						temp += emission[1][k][i - 1]
+
+					## \tau
+					tune1 = 0.0001 # the ratio
+					tune2 = 1000 # N in the literature
+					r = (position[i] - position[i - 1]) * 0.00000001
+					## NOTE: tune here to make p1 and p2 comparable
+					if k == j:
+						temp += (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
+					else:
+						temp += (1 - math.exp( - tune1 * r )) / tune2
+
+					## \xi
+					if H[0][i] == 1:  # favor S = 1, use emission[0]
+						temp += emission[0][j][i]
+					else:
+						temp += emission[1][j][i]
+
+					sum += math.exp(temp)
+				F1[j][i] = sum
+			continue
+
+		### otherwise i >= 2
+		for j in range(N_ref):
+			## fill F1[j][i] for each j
+			sum = 0
+			for k in range(N_ref):
+				## calculate V * exp( \tau() + \xi() )
+				temp = 0
+
+				## \tau
+				tune1 = 0.0001 # the ratio
+				tune2 = 1000 # N in the literature
+				r = (position[i] - position[i - 1]) * 0.00000001
+				## NOTE: tune here to make p1 and p2 comparable
+				if k == j:
+					temp += (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
+				else:
+					temp += (1 - math.exp( - tune1 * r )) / tune2
+
+				## \xi
+				if H[0][i] == 1:  # favor S = 1, use emission[0]
+					temp += emission[0][j][i]
+				else:
+					temp += emission[1][j][i]
+
+				sum += F1[k][i - 1] * math.exp(temp)
+			F1[j][i] = sum
+
+	## now we have F1 ready (there are no contents in the first column)
+
+	#####======================== backward sampling =========================
+	sum = 0
+	for i in range(N_ref):
+		sum += F1[i][N_site - 1]
+	for i in range(N_ref):
+		F2[i][N_site - 1] = F1[i][N_site - 1] / sum
+
+	## sample P(s_L)
+	p = []
+	for i in range(N_ref):
+		p.append(F2[i][N_site - 1])
+	l = np.random.multinomial(1, p, size=1)[0]
+	for i in range(N_ref):
+		if l[i] == 1:
+			S[0][N_site - 1] = i
+			break
+
+	for i in reversed(range(N_site)):
+		if i == (N_site - 1) or i == 0:
+			continue
+		else:
+			for j in range(N_ref):
+				tau = 0
+				## \tau
+				tune1 = 0.0001 # the ratio
+				tune2 = 1000 # N in the literature
+				r = (position[i + 1] - position[i]) * 0.00000001
+				## NOTE: tune here to make p1 and p2 comparable
+				if j == S[0][i + 1]:
+					tau = (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
+				else:
+					tau = (1 - math.exp( - tune1 * r )) / tune2
+
+				F2[j][i] = F1[j][i] * math.exp(  tau  )
+			sum = 0
+			for j in range(N_ref):
+				sum += F2[j][i]
+			for j in range(N_ref):
+				F2[j][i] = F2[j][i] / sum
+
+			## sample P(s_i | s_{i+1}), i = 2:(L-1)
+			p = []
+			for j in range(N_ref):
+				p.append(F2[j][i])
+			l = np.random.multinomial(1, p, size=1)[0]
+			for j in range(N_ref):
+				if l[j] == 1:
+					S[0][i] = j
+					break
+
+	for j in range(N_ref):
+		temp = 0
+
+		## \xi
+		if H[0][0] == 1:  # favor S = 1, use emission[0]
+			temp += emission[0][j][0]
+		else:
+			temp += emission[1][j][0]
+
+		## \tau
+		tune1 = 0.0001 # the ratio
+		tune2 = 1000 # N in the literature
+		r = (position[1] - position[0]) * 0.00000001
+		## NOTE: tune here to make p1 and p2 comparable
+		if j == S[0][1]:
+			temp += (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
+		else:
+			temp += (1 - math.exp( - tune1 * r )) / tune2
+
+		F2[j][0] = math.exp(temp)
+
+	sum = 0
+	for j in range(N_ref):
+		sum += F2[j][0]
+	for j in range(N_ref):
+		F2[j][0] = F2[j][0] / sum
+
+	## sample P(s_1 | s_{2})
+	p = []
+	for j in range(N_ref):
+		p.append(F2[j][0])
+	l = np.random.multinomial(1, p, size=1)[0]
+	for i in range(N_ref):
+		if l[i] == 1:
+			S[0][0] = i
+			break
+	#####============================== sampling S[0] done =============================
+
+
+
+
+
+	#####============================== sampling S[1] =================================
+	#####======================== forward marginalization =============================
+	for i in range(N_site):
+		if i == 0:  # no content
+			continue
+
+		if i == 1:  # V1(s2)
+			for j in range(N_ref):
+				## fill F1[j][i] for each j
+				sum = 0
+				for k in range(N_ref):
+					## calculate exp( \xi() + \tau() + \xi() )
+					temp = 0
+
+					## \xi
+					if H[1][i - 1] == 1:  # favor S = 1, use emission[0]
+						temp += emission[0][k][i - 1]
+					else:
+						temp += emission[1][k][i - 1]
+
+					## \tau
+					tune1 = 0.0001 # the ratio
+					tune2 = 1000 # N in the literature
+					r = (position[i] - position[i - 1]) * 0.00000001
+					## NOTE: tune here to make p1 and p2 comparable
+					if k == j:
+						temp += (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
+					else:
+						temp += (1 - math.exp( - tune1 * r )) / tune2
+
+					## \xi
+					if H[1][i] == 1:  # favor S = 1, use emission[0]
+						temp += emission[0][j][i]
+					else:
+						temp += emission[1][j][i]
+
+					sum += math.exp(temp)
+				F1[j][i] = sum
+			continue
+
+		### otherwise i >= 2
+		for j in range(N_ref):
+			## fill F1[j][i] for each j
+			sum = 0
+			for k in range(N_ref):
+				## calculate V * exp( \tau() + \xi() )
+				temp = 0
+
+				## \tau
+				tune1 = 0.0001 # the ratio
+				tune2 = 1000 # N in the literature
+				r = (position[i] - position[i - 1]) * 0.00000001
+				## NOTE: tune here to make p1 and p2 comparable
+				if k == j:
+					temp += (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
+				else:
+					temp += (1 - math.exp( - tune1 * r )) / tune2
+
+				## \xi
+				if H[1][i] == 1:  # favor S = 1, use emission[0]
+					temp += emission[0][j][i]
+				else:
+					temp += emission[1][j][i]
+
+				sum += F1[k][i - 1] * math.exp(temp)
+			F1[j][i] = sum
+
+	## now we have F1 ready (there are no contents in the first column)
+
+	#####======================== backward sampling =========================
+	sum = 0
+	for i in range(N_ref):
+		sum += F1[i][N_site - 1]
+	for i in range(N_ref):
+		F2[i][N_site - 1] = F1[i][N_site - 1] / sum
+
+	## sample P(s_L)
+	p = []
+	for i in range(N_ref):
+		p.append(F2[i][N_site - 1])
+	l = np.random.multinomial(1, p, size=1)[0]
+	for i in range(N_ref):
+		if l[i] == 1:
+			S[1][N_site - 1] = i
+			break
+
+	for i in reversed(range(N_site)):
+		if i == (N_site - 1) or i == 0:
+			continue
+		else:
+			for j in range(N_ref):
+				tau = 0
+				## \tau
+				tune1 = 0.0001 # the ratio
+				tune2 = 1000 # N in the literature
+				r = (position[i + 1] - position[i]) * 0.00000001
+				## NOTE: tune here to make p1 and p2 comparable
+				if j == S[1][i + 1]:
+					tau = (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
+				else:
+					tau = (1 - math.exp( - tune1 * r )) / tune2
+
+				F2[j][i] = F1[j][i] * math.exp(  tau  )
+			sum = 0
+			for j in range(N_ref):
+				sum += F2[j][i]
+			for j in range(N_ref):
+				F2[j][i] = F2[j][i] / sum
+
+			## sample P(s_i | s_{i+1}), i = 2:(L-1)
+			p = []
+			for j in range(N_ref):
+				p.append(F2[j][i])
+			l = np.random.multinomial(1, p, size=1)[0]
+			for j in range(N_ref):
+				if l[j] == 1:
+					S[1][i] = j
+					break
+
+	for j in range(N_ref):
+		temp = 0
+
+		## \xi
+		if H[1][0] == 1:  # favor S = 1, use emission[0]
+			temp += emission[0][j][0]
+		else:
+			temp += emission[1][j][0]
+
+		## \tau
+		tune1 = 0.0001 # the ratio
+		tune2 = 1000 # N in the literature
+		r = (position[1] - position[0]) * 0.00000001
+		## NOTE: tune here to make p1 and p2 comparable
+		if j == S[1][1]:
+			temp += (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
+		else:
+			temp += (1 - math.exp( - tune1 * r )) / tune2
+
+		F2[j][0] = math.exp(temp)
+
+	sum = 0
+	for j in range(N_ref):
+		sum += F2[j][0]
+	for j in range(N_ref):
+		F2[j][0] = F2[j][0] / sum
+
+	## sample P(s_1 | s_{2})
+	p = []
+	for j in range(N_ref):
+		p.append(F2[j][0])
+	l = np.random.multinomial(1, p, size=1)[0]
+	for i in range(N_ref):
+		if l[i] == 1:
+			S[1][0] = i
+			break
+	#####============================== sampling S[1] done ============================
+
+	return
+
 
 
 def sampler_H():  # sampling H conditional on R and S
@@ -382,10 +729,6 @@ def sampler_H():  # sampling H conditional on R and S
 
 
 if __name__ == '__main__':
-
-
-	print "begin testing..."
-
 
 
 	## manually set the index first
