@@ -38,8 +38,10 @@ reads_reshaped = []
 N_round = 10000
 N_test = 100  # the number of tested allele sites
 N_test2 = 50  # the number of reference panels used here
+# the following two are used in \tau, they should be tuned
+tune1 = 0.0001 # the ratio
+tune2 = 1000 # N in the literature
 ##=======================================
-
 
 
 
@@ -51,6 +53,8 @@ def like():  # global likelihood under the present parameter setting
 	global H
 	global reference
 	global position
+	global tune1
+	global tune2
 
 	sum = 0
 
@@ -96,9 +100,7 @@ def like():  # global likelihood under the present parameter setting
 			sum += math.log(omega)
 
 		# tau
-		tune1 = 0.0001 # the ratio
-		tune2 = 1000 # N in the literature
-		r = (position[i+1] - position[i]) * 0.00000001
+		r = (position[i + 1] - position[i])
 		if S[0][i] == S[0][i + 1]:
 			sum += (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
 		else:
@@ -108,6 +110,7 @@ def like():  # global likelihood under the present parameter setting
 			sum += (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
 		else:
 			sum += (1 - math.exp( - tune1 * r )) / tune2
+
 
 	# last zeta
 	if H[0][N_site - 1] == reference[S[0][N_site - 1]][N_site - 1]:
@@ -155,13 +158,20 @@ def sampler_R():  # sampling R with fixed H (S is conditionally independent)
 		for site in read:
 			index = site[0]
 			allele = site[1]
+			theta1 = 0
+			theta2 = 0
 
+			## check all sites, and allocate score based on the evidence from allele and h
 			if allele * H[0][index] == 1:
 				theta1 = math.log(1 - epsilon)
-				theta2 = math.log(epsilon)
 			else:
 				theta1 = math.log(epsilon)
+			## because H[0][i] may be different from H[1][i]
+			if allele * H[1][index] == 1:
 				theta2 = math.log(1 - epsilon)
+			else:
+				theta2 = math.log(epsilon)
+
 
 			sum1 += theta1
 			sum2 += theta2
@@ -332,6 +342,8 @@ def sampler_S():  # we use the sampling procedure described in the paper
 	global S
 	global H
 	global position
+	global tune1
+	global tune2
 
 	## emission matrix: [  [[1-omega, omega, 1-omega, ...],  [1-omega, omega, 1-omega, ...]],  []  ]
 	## transition matrix: called when necessary
@@ -364,10 +376,7 @@ def sampler_S():  # we use the sampling procedure described in the paper
 						temp += emission[1][k][i - 1]
 
 					## \tau
-					tune1 = 0.0001 # the ratio
-					tune2 = 1000 # N in the literature
-					r = (position[i] - position[i - 1]) * 0.00000001
-					## NOTE: tune here to make p1 and p2 comparable
+					r = (position[i] - position[i - 1])
 					if k == j:
 						temp += (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
 					else:
@@ -392,10 +401,7 @@ def sampler_S():  # we use the sampling procedure described in the paper
 				temp = 0
 
 				## \tau
-				tune1 = 0.0001 # the ratio
-				tune2 = 1000 # N in the literature
-				r = (position[i] - position[i - 1]) * 0.00000001
-				## NOTE: tune here to make p1 and p2 comparable
+				r = (position[i] - position[i - 1])
 				if k == j:
 					temp += (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
 				else:
@@ -436,10 +442,7 @@ def sampler_S():  # we use the sampling procedure described in the paper
 			for j in range(N_ref):
 				tau = 0
 				## \tau
-				tune1 = 0.0001 # the ratio
-				tune2 = 1000 # N in the literature
-				r = (position[i + 1] - position[i]) * 0.00000001
-				## NOTE: tune here to make p1 and p2 comparable
+				r = (position[i + 1] - position[i])
 				if j == S[0][i + 1]:
 					tau = (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
 				else:
@@ -472,10 +475,7 @@ def sampler_S():  # we use the sampling procedure described in the paper
 			temp += emission[1][j][0]
 
 		## \tau
-		tune1 = 0.0001 # the ratio
-		tune2 = 1000 # N in the literature
-		r = (position[1] - position[0]) * 0.00000001
-		## NOTE: tune here to make p1 and p2 comparable
+		r = (position[1] - position[0])
 		if j == S[0][1]:
 			temp += (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
 		else:
@@ -494,9 +494,9 @@ def sampler_S():  # we use the sampling procedure described in the paper
 	for j in range(N_ref):
 		p.append(F2[j][0])
 	l = np.random.multinomial(1, p, size=1)[0]
-	for i in range(N_ref):
-		if l[i] == 1:
-			S[0][0] = i
+	for j in range(N_ref):
+		if l[j] == 1:
+			S[0][0] = j
 			break
 	#####============================== sampling S[0] done =============================
 
@@ -525,10 +525,7 @@ def sampler_S():  # we use the sampling procedure described in the paper
 						temp += emission[1][k][i - 1]
 
 					## \tau
-					tune1 = 0.0001 # the ratio
-					tune2 = 1000 # N in the literature
-					r = (position[i] - position[i - 1]) * 0.00000001
-					## NOTE: tune here to make p1 and p2 comparable
+					r = (position[i] - position[i - 1])
 					if k == j:
 						temp += (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
 					else:
@@ -553,10 +550,7 @@ def sampler_S():  # we use the sampling procedure described in the paper
 				temp = 0
 
 				## \tau
-				tune1 = 0.0001 # the ratio
-				tune2 = 1000 # N in the literature
-				r = (position[i] - position[i - 1]) * 0.00000001
-				## NOTE: tune here to make p1 and p2 comparable
+				r = (position[i] - position[i - 1])
 				if k == j:
 					temp += (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
 				else:
@@ -597,10 +591,7 @@ def sampler_S():  # we use the sampling procedure described in the paper
 			for j in range(N_ref):
 				tau = 0
 				## \tau
-				tune1 = 0.0001 # the ratio
-				tune2 = 1000 # N in the literature
-				r = (position[i + 1] - position[i]) * 0.00000001
-				## NOTE: tune here to make p1 and p2 comparable
+				r = (position[i + 1] - position[i])
 				if j == S[1][i + 1]:
 					tau = (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
 				else:
@@ -633,10 +624,7 @@ def sampler_S():  # we use the sampling procedure described in the paper
 			temp += emission[1][j][0]
 
 		## \tau
-		tune1 = 0.0001 # the ratio
-		tune2 = 1000 # N in the literature
-		r = (position[1] - position[0]) * 0.00000001
-		## NOTE: tune here to make p1 and p2 comparable
+		r = (position[1] - position[0])
 		if j == S[1][1]:
 			temp += (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
 		else:
