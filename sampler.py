@@ -8,11 +8,7 @@
 ## 2. trend of error rate changes
 
 
-## questions:
-## 1. read index start from 1 or 0?
-## 2. remember to change the double lambda function
-
-
+################################################################################################
 import os
 import sys
 import numpy as np
@@ -38,6 +34,7 @@ reads_reshaped = []
 N_round = 10000
 N_test = 100  # the number of tested allele sites
 N_test2 = 50  # the number of reference panels used here
+
 # the following two are used in \tau, they should be tuned
 tune1 = 0.0001 # the ratio
 tune2 = 1000 # N in the literature
@@ -183,155 +180,6 @@ def sampler_R():  # sampling R with fixed H (S is conditionally independent)
 		R[i] = r
 
 	return
-
-
-
-"""
-### this is the old sampler, in which we actually used Viterbi decoding and that's obviously wrong.
-def sampler_S():  # we actually perform Viterbi decoding here, other than sampling
-	global emission
-	global N_site
-	global S
-	global H
-	global N_ref
-	global position
-
-	## emission matrix: [  [[1-omega, omega, 1-omega, ...],  [1-omega, omega, 1-omega, ...]],  []  ]
-	## transition matrix: called when necessary
-
-	## change the following to hash table:
-	#F1 = [[0] * N_site] * N_ref  # the DP maximum value
-	#F2 = [[0] * N_site] * N_ref  # the achieved position in last site
-
-	F1 = {}
-	F2 = {}
-	for i in range(N_ref):
-		F1[i] = [0] * N_site
-		F2[i] = [0] * N_site
-
-
-	###================== start Viterbi =====================
-	##==================== infer S[0] =======================
-	## forward maximization
-	for i in range(N_site):
-		if i == 0:
-			if H[0][i] == 1:  # favor ref = 1, use emission[0]
-				for j in range(N_ref):
-					F1[j][i] = emission[0][j][i]
-			else:  # favor ref = -1, use emission[1]
-				for j in range(N_ref):
-					F1[j][i] = emission[1][j][i]
-			continue
-
-		for j in range(N_ref):
-			## fill F1[j][i] and F2[j][i] for each j
-			max_value = 0
-			for k in range(N_ref):
-				## calculate: mu_{i-1}(z_{i-1}) * P(z_i | z_{i-1}) * P(x_i | z_i)
-				## if there is a bigger one, update: F1[j][i] and F2[j][i]
-				temp = 0
-				p1 = 0
-				p2 = 0
-				if H[0][i] == 1:
-					p1 = emission[0][j][i]
-				else:
-					p1 = emission[1][j][i]
-
-				tune1 = 0.0001 # the ratio
-				tune2 = 1000 # N in the literature
-				r = (position[i] - position[i - 1]) * 0.00000001
-				## NOTE: tune here to make p1 and p2 comparable
-				if k == j:
-					p2 = (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
-				else:
-					p2 = (1 - math.exp( - tune1 * r )) / tune2
-
-				temp = p1 * p2 * F1[k][i-1]
-
-				if temp > max_value:
-					max_value = temp
-					F1[j][i] = temp
-					F2[j][i] = k
-
-	## first of all, find the last achieved reference
-	max_ref = 0
-	max_value = 0
-	for j in range(N_ref):
-		temp = F1[j][N_site - 1]
-		if temp > max_value:
-			max_ref = j
-	S[0][N_site - 1] = max_ref
-
-	## backtrack
-	for i in reversed(range(N_site)):  # find previous ref
-		if i == 0:
-			continue
-		S[0][i - 1] = F2[max_ref][i]
-		max_ref = S[0][i - 1]
-
-
-	##==================== infer S[1] =======================
-	## forward maximization
-	for i in range(N_site):
-		if i == 0:
-			if H[1][i] == 1:  # favor ref = 1, use emission[0]
-				for j in range(N_ref):
-					F1[j][i] = emission[0][j][i]
-			else:  # favor ref = -1, use emission[1]
-				for j in range(N_ref):
-					F1[j][i] = emission[1][j][i]
-			continue
-
-		for j in range(N_ref):
-			## fill F1[j][i] and F2[j][i] for each j
-			max_value = 0
-			for k in range(N_ref):
-				## calculate: mu_{i-1}(z_{i-1}) * P(z_i | z_{i-1}) * P(x_i | z_i)
-				## if there is a bigger one, update: F1[j][i] and F2[j][i]
-				temp = 0
-				p1 = 0
-				p2 = 0
-				if H[1][i] == 1:
-					p1 = emission[0][j][i]
-				else:
-					p1 = emission[1][j][i]
-
-				tune1 = 0.0001 # the ratio
-				tune2 = 1000 # N in the literature
-				r = (position[i] - position[i - 1]) * 0.00000001
-				## NOTE: tune here to make p1 and p2 comparable
-				if k == j:
-					p2 = (math.exp( - tune1 * r ) + (1 - math.exp( - tune1 * r ))) / tune2
-				else:
-					p2 = (1 - math.exp( - tune1 * r )) / tune2
-
-				temp = p1 * p2 * F1[k][i-1]
-
-				if temp > max_value:
-					max_value = temp
-					F1[j][i] = temp
-					F2[j][i] = k
-
-	## first of all, find the last achieved reference
-	max_ref = 0
-	max_value = 0
-	for j in range(N_ref):
-		temp = F1[j][N_site - 1]
-		if temp > max_value:
-			max_ref = j
-	S[1][N_site - 1] = max_ref
-
-	## backtrack
-	for i in reversed(range(N_site)):  # find previous ref
-		if i == 0:
-			continue
-		S[1][i - 1] = F2[max_ref][i]
-		max_ref = S[1][i - 1]
-	###=================== end Viterbi ======================
-
-	return
-"""
-
 
 
 
